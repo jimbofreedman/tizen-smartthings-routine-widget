@@ -5,23 +5,9 @@
 #include "uib_app_manager.h"
 #include "auth.h"
 
-/* app event callbacks */
 static widget_class_h widget_app_create(void *user_data);
 static void widget_app_terminate(void *user_data);
 static int _on_create_cb(widget_context_h context, bundle *content, int w, int h, void *user_data);
-static int _on_destroy_cb(widget_context_h context, widget_app_destroy_type_e reason, bundle *content, void *user_data);
-static int _on_resume_cb(widget_context_h context, void *user_data);
-static int _on_pause_cb(widget_context_h context, void *user_data);
-static int _on_update_cb(widget_context_h context, bundle *content, int force, void *user_data);
-static int _on_update_resize(widget_context_h context, int w, int h, void *user_data);
-static void _on_low_memory_cb(app_event_info_h event_info, void *user_data);
-static void _on_low_battery_cb(app_event_info_h event_info, void *user_data);
-static void _on_device_orientation_cb(app_event_info_h event_info,
-		void *user_data);
-static void _on_language_changed_cb(app_event_info_h event_info,
-		void *user_data);
-static void _on_region_format_changed_cb(app_event_info_h event_info,
-		void *user_data);
 
 void nf_hw_back_cb(void* param, Evas_Object * evas_obj, void* event_info) {
 	//TODO : user define code
@@ -65,27 +51,8 @@ int uib_app_run(app_data *user_data, int argc, char **argv) {
 static widget_class_h widget_app_create(void *user_data) {
 	app_event_handler_h handlers[5] = { NULL, };
 
-	widget_app_add_event_handler(&handlers[APP_EVENT_LOW_BATTERY],
-			APP_EVENT_LOW_BATTERY, _on_low_battery_cb, user_data);
-	widget_app_add_event_handler(&handlers[APP_EVENT_LOW_MEMORY],
-			APP_EVENT_LOW_MEMORY, _on_low_memory_cb, user_data);
-	widget_app_add_event_handler(
-			&handlers[APP_EVENT_DEVICE_ORIENTATION_CHANGED],
-			APP_EVENT_DEVICE_ORIENTATION_CHANGED, _on_device_orientation_cb,
-			user_data);
-	widget_app_add_event_handler(&handlers[APP_EVENT_LANGUAGE_CHANGED],
-			APP_EVENT_LANGUAGE_CHANGED, _on_language_changed_cb, user_data);
-	widget_app_add_event_handler(&handlers[APP_EVENT_REGION_FORMAT_CHANGED],
-			APP_EVENT_REGION_FORMAT_CHANGED, _on_region_format_changed_cb,
-			user_data);
-
 	widget_instance_lifecycle_callback_s cbs = {
-			.create = _on_create_cb,
-			.destroy = _on_destroy_cb,
-			.pause = _on_pause_cb,
-			.resume = _on_resume_cb,
-			.update = _on_update_cb,
-			.resize = _on_update_resize,
+			.create = _on_create_cb
 	};
 
 	return widget_app_class_create(cbs, user_data);
@@ -96,13 +63,7 @@ void widget_app_terminate(void *user_data) {
 	uib_views_get_instance()->destroy_window_obj();
 }
 
-#define WAITMS(x)                               \
-  struct timeval wait = { 0, (x) * 1000 };      \
-  (void)select(0, NULL, NULL, NULL, &wait);
-
-
 static void* send_request(void *item) {
-	CURLcode res;
 	CURL *http_handle;
 	CURLM *multi_handle;
 	int still_running; // keep number of running handles
@@ -110,7 +71,7 @@ static void* send_request(void *item) {
 	connection_h connection;
 	int conn_err;
 	char *proxy_address;
-	char *routineName;
+	const char *routineName;
 
 	eext_rotary_selector_item_part_text_set(item, "selector,sub_text", "Changing...");
 
@@ -123,6 +84,8 @@ static void* send_request(void *item) {
 
 	http_handle = curl_easy_init();
 	if (http_handle) {
+		dlog_print(DLOG_INFO, LOG_TAG, "Making request...\n");
+
 		if (conn_err == CONNECTION_ERROR_NONE && proxy_address) {
 			curl_easy_setopt(http_handle, CURLOPT_PROXY, proxy_address);
 		}
@@ -156,7 +119,8 @@ static void* send_request(void *item) {
 			if(!numfds) {
 				repeats++; // count number of repeated zero num of file descriptors
 				if(repeats > 1) {
-					sleep(0.1);
+					sleep(1);
+					dlog_print(DLOG_INFO, LOG_TAG, "Sleeping!\n");
 				}
 			}
 			else
@@ -165,13 +129,17 @@ static void* send_request(void *item) {
 			curl_multi_perform(multi_handle, &still_running);
 		} while(still_running);
 
+		dlog_print(DLOG_INFO, LOG_TAG, "Request finished!\n");
 		CURLMsg *msg = curl_multi_info_read(multi_handle, &numfds);
 		if (msg->data.result == CURLE_OK) {
+			dlog_print(DLOG_INFO, LOG_TAG, "OK");
 			eext_rotary_selector_item_part_text_set(item, "selector,sub_text", "Done!");
 		} else {
+			dlog_print(DLOG_ERROR, LOG_TAG, "ERROR");
 			dlog_print(DLOG_ERROR, LOG_TAG, curl_easy_strerror(msg->data.result));
 			eext_rotary_selector_item_part_text_set(item, "selector,sub_text", curl_easy_strerror(msg->data.result));
 		}
+		sleep(3);
 
 		curl_multi_remove_handle(multi_handle, http_handle);
 		curl_easy_cleanup(http_handle);
@@ -179,7 +147,6 @@ static void* send_request(void *item) {
 	}
 	curl_global_cleanup();
 	connection_destroy(connection);
-	dlog_print(DLOG_INFO, LOG_TAG, "Request finished!\n");
 
 	return 0;
 }
@@ -187,17 +154,7 @@ static void* send_request(void *item) {
 static void
 _item_clicked_cb(void *data, Evas_Object *obj, void *event_info)
 {
-	Eext_Object_Item *item;
-	const char *main_text;
-	const char *sub_text;
-
-	/* Get current seleted item object */
-	item = eext_rotary_selector_selected_item_get(obj);
-
-	/* Get set text for the item */
-	main_text = eext_rotary_selector_item_part_text_get(item, "selector,main_text");
-	sub_text = eext_rotary_selector_item_part_text_get(item, "selector,sub_text");
-
+	Eext_Object_Item *item = eext_rotary_selector_selected_item_get(obj);
 	dlog_print(DLOG_INFO, LOG_TAG, "Item Clicked!, Currently Selected \n");
 	ecore_thread_run(send_request, NULL, NULL, item);
 }
@@ -220,7 +177,6 @@ _item_create(Evas_Object *rotary_selector, char* routineName, char* iconName)
 	char image_path[PATH_MAX];
 
 	item = eext_rotary_selector_item_append(rotary_selector);
-
 	image = elm_image_add(rotary_selector);
 	app_get_resource(iconName, image_path, (int)PATH_MAX);
 	elm_image_file_set(image, image_path, NULL);
@@ -237,11 +193,8 @@ static int _on_create_cb(widget_context_h context, bundle *content, int w, int h
 	uib_app_manager_get_instance()->initialize(context, w, h);
 
 	Evas_Object *parent = uib_views_get_instance()->get_window_obj()->app_naviframe;
+	Evas_Object *rotary_selector = eext_rotary_selector_add(parent);
 
-	Evas_Object *rotary_selector;
-	Elm_Object_Item *nf_it = NULL;
-
-	rotary_selector = eext_rotary_selector_add(parent);
 	eext_rotary_object_event_activated_set(rotary_selector, EINA_TRUE);
 
 	_item_create(rotary_selector, "Bedtime", "009-sleeping-bed-silhouette.png");
@@ -256,57 +209,6 @@ static int _on_create_cb(widget_context_h context, bundle *content, int w, int h
 	_item_create(rotary_selector, "Away", "001-airplane-around-earth.png");
 
 	evas_object_smart_callback_add(rotary_selector, "item,clicked", _item_clicked_cb, NULL);
-
-	nf_it = elm_naviframe_item_push(parent, _("Rotary Selector"), NULL, NULL, rotary_selector, "empty");
+    elm_naviframe_item_push(parent, _("Rotary Selector"), NULL, NULL, rotary_selector, "empty");
 	return WIDGET_ERROR_NONE;
-}
-
-static int _on_destroy_cb(widget_context_h context, widget_app_destroy_type_e reason, bundle *content, void *user_data) {
-	return WIDGET_ERROR_NONE;
-}
-
-static int _on_resume_cb(widget_context_h context, void *user_data) {
-	/* Take necessary actions when widget instance becomes visible. */
-	return WIDGET_ERROR_NONE;
-}
-
-static int _on_pause_cb(widget_context_h context, void *user_data) {
-	/* Take necessary actions when widget instance becomes invisible. */
-	return WIDGET_ERROR_NONE;
-}
-
-static int _on_update_cb(widget_context_h context, bundle *content, int force,
-		void *user_data) {
-	/* Take necessary actions when widget instance should be updated. */
-	return WIDGET_ERROR_NONE;
-}
-
-static int _on_update_resize(widget_context_h context, int w, int h,
-		void *user_data) {
-	/* Take necessary actions when the size of widget instance was changed. */
-	return WIDGET_ERROR_NONE;
-}
-
-static void _on_low_battery_cb(app_event_info_h event_info, void *user_data) {
-	/* Take necessary actions when the battery is low. */
-}
-
-static void _on_low_memory_cb(app_event_info_h event_info, void *user_data) {
-	/* Take necessary actions when the system runs low on memory. */
-}
-
-static void _on_device_orientation_cb(app_event_info_h event_info,
-		void *user_data) {
-	/* deprecated APIs */
-}
-
-static void _on_language_changed_cb(app_event_info_h event_info,
-		void *user_data) {
-	/* Take necessary actions is called when language setting changes. */
-	uib_views_get_instance()->uib_views_current_view_redraw();
-}
-
-static void _on_region_format_changed_cb(app_event_info_h event_info,
-		void *user_data) {
-	/* Take necessary actions when region format setting changes. */
 }
