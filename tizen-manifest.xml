@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<manifest xmlns="http://tizen.org/ns/packages" api-version="2.3.2" package="uk.co.makosoft.smartthingsroutinewidget" version="1.0.0">
+    <profile name="wearable"/>
+    <widget-application appid="uk.co.makosoft.smartthingsroutinewidget" exec="smartthingsroutinewidget" main="true" update-period="0">
+        <label>smartthingsroutinewidget</label>
+        <icon>smartthingsroutinewidget.png</icon>
+        <support-size preview="screenshot.png">2x2</support-size>
+    </widget-application>
+    <privileges>
+        <privilege>http://tizen.org/privilege/network.get</privilege>
+        <privilege>http://tizen.org/privilege/network.set</privilege>
+        <privilege>http://tizen.org/privilege/internet</privilege>
+        <privilege>http://tizen.org/privilege/network.profile</privilege>
+    </privileges>
+</manifest>

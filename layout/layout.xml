@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document>
+	<mscreen>
+		<configuration device="CIRCLE_360x360" id="config1"
+			name="common" orientation="portrait" type="common" />
+	</mscreen>
+	<views startup="view1">
+		<view id="view1" indicator="true" type="view">
+			
+		
+		</view>
+	</views>
+</document>
